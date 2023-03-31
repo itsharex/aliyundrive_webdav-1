@@ -1,6 +1,7 @@
 package ali_driver
 
 import (
+	"aliyundrive_webdav/db"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/skip2/go-qrcode"
@@ -45,49 +46,57 @@ func CheckQrCodeStatus(sid string) (result AliQRCodeStatusResult, err error) {
 
 // Auth 登录授权.
 // 通过 QrCodeStatus 方法返回的 authCode 参数获取 access_token 和 refresh_token
-func Auth(authCode string) (result AliAuthResult, err error) {
+func Auth(authCode string) (authToken aliyundrive_open.Authorize, err error) {
 	req := map[string]string{
 		"authCode":   authCode,
 		"grant_type": "authorization_code",
 	}
 
+	result := AliAuthResult{}
 	err = aliyundrive_open.HttpPost(APITVPanAuth, nil, req, &result)
 	if err != nil {
-		return result, err
+		return authToken, err
 	}
 
 	if result.Error != "" {
 		err = fmt.Errorf("获取二维码失败: %s", result.Error)
 	}
 
-	return result, err
+	authToken = result.Data
+
+	return authToken, err
 }
 
 // RefreshToken 刷新 access_token
 // 通过 Auth 方法返回的 refresh_token 参数刷新 access_token
-func RefreshToken(refreshToken string) (result AliAuthResult, err error) {
+func RefreshToken(refreshToken string) (authToken aliyundrive_open.Authorize, err error) {
+
 	req := map[string]string{
 		"refresh_token": refreshToken,
 		"grant_type":    "refresh_token",
 	}
 
+	result := AliAuthResult{}
 	err = aliyundrive_open.HttpPost(APITVPanAuth, nil, req, &result)
 	if err != nil {
-		return result, err
+		return authToken, err
 	}
 
 	if result.Error != "" {
 		err = fmt.Errorf("获取二维码失败: %s", result.Error)
 	}
 
-	return result, err
+	authToken = result.Data
+
+	return authToken, db.SaveAccessToken(result.Data)
 }
 
 // 完整的登录授权流程
-func LoginQRCode() (result AliAuthResult, err error) {
+func LoginQRCode() (authToken aliyundrive_open.Authorize, err error) {
+
 	qrCode, err := GetQRCode()
 	if err != nil {
-		return result, err
+		return authToken, err
 	}
 
 	qrData := fmt.Sprintf("https://www.aliyundrive.com/o/oauth/authorize?sid=%s", qrCode.Data.Sid)
@@ -107,7 +116,7 @@ func LoginQRCode() (result AliAuthResult, err error) {
 			status, err := CheckQrCodeStatus(qrCode.Data.Sid)
 			if err != nil {
 				color.Cyan("获取二维码状态失败: %s\n", err)
-				return result, err
+				return authToken, err
 			}
 			switch status.Data.Status {
 			case "WaitLogin":
@@ -128,8 +137,8 @@ func LoginQRCode() (result AliAuthResult, err error) {
 	authorize, err := Auth(authCode)
 	if err != nil {
 		color.Cyan("登录授权失败: %s\r", err)
-		return result, err
+		return authToken, err
 	}
 
-	return authorize, nil
+	return authorize, db.SaveAccessToken(authorize)
 }

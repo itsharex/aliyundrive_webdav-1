@@ -3,10 +3,13 @@ package db
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/yanjunhui/aliyundrive_open"
 	"log"
+	"os"
 	"strings"
+	"time"
 )
 
 type File struct {
@@ -15,29 +18,82 @@ type File struct {
 	Path       string `json:"path"`
 }
 
+var deBug = false
+
 var FilesMapData = map[string][]File{}
 
 func SaveFile() error {
 	wo := &opt.WriteOptions{
 		Sync: false,
 	}
-	for key, value := range FilesMapData {
-		for _, item := range value {
-			if !item.IsDir() {
-				fileKey := strings.Replace(item.Path, "/", "_", -1)
-				fileData, err := json.Marshal(item)
-				if err == nil {
-					err = DataBase.Client.Put([]byte(fileKey), fileData, wo)
+
+	save := func(file File) {
+		key := makePathKey(file.Path)
+		jsonData, err := json.Marshal(file)
+		if err == nil {
+			if deBug {
+				err = writeJsonData(key, jsonData)
+				if err != nil {
+					log.Println("写入测试Json数据失败: ", err.Error())
+					return
+				}
+			}
+
+			//删除重命名的文件
+			cacheFilePath, err := DataBase.GetString(file.FileId, false)
+			if err == nil {
+				if cacheFilePath != file.Path {
+					err = os.Remove(makePathKey(cacheFilePath))
 					if err != nil {
-						log.Printf("保存文件(%s)失败: %s", key, err.Error())
+						log.Println("删除缓存文件失败: ", err.Error())
 					}
 				}
 			}
+
+			//保存FileID和Path对应关系
+			err = DataBase.SetString(file.FileId, file.Path, true)
+			if err != nil {
+				log.Println("保存FileID和Path对应关系失败: ", err.Error())
+				return
+			}
+
+			err = DataBase.Client.Put([]byte(key), jsonData, wo)
+			if err != nil {
+				log.Printf("保存文件(%s)失败: %s", key, err.Error())
+			}
+		}
+	}
+
+	for key, value := range FilesMapData {
+		//保存目录内文件信息
+		for _, item := range value {
+			if !item.IsDir() {
+				save(item)
+			}
 		}
 
-		key = strings.Replace(key, "/", "_", -1)
+		//保存目录信息
+		key = makePathKey(key)
 		dirFile, err := GetListIndexData(key)
 		if err == nil {
+			//删除重命名的文件
+			cacheFilePath, err := DataBase.GetString(dirFile.FileId, false)
+			if err == nil {
+				if cacheFilePath != dirFile.Path {
+					err = os.Remove(makePathKey(cacheFilePath))
+					if err != nil {
+						log.Println("删除缓存文件失败: ", err.Error())
+					}
+				}
+			}
+
+			//保存FileID和Path对应关系
+			err = DataBase.SetString(dirFile.FileId, dirFile.Path, true)
+			if err != nil {
+				log.Println("保存FileID和Path对应关系失败: ", err.Error())
+				return err
+			}
+
 			err = SaveListIndexData(dirFile)
 			if err != nil {
 				log.Printf("保存文件(%s)列表索引信息失败: %s", key, err.Error())
@@ -46,6 +102,14 @@ func SaveFile() error {
 
 		jsonData, err := json.Marshal(value)
 		if err == nil {
+			if deBug {
+				err = writeJsonData(key, jsonData)
+				if err != nil {
+					log.Println("写入测试Json数据失败: ", err.Error())
+					return err
+				}
+			}
+
 			err = DataBase.Client.Put([]byte(key), jsonData, wo)
 			if err != nil {
 				log.Printf("保存文件(%s)列表失败: %s", key, err.Error())
@@ -61,21 +125,32 @@ func SaveListIndexData(file File) error {
 		Sync: false,
 	}
 
-	key := strings.Replace(file.Path, "/", "_", -1)
-	key = "index_" + key
+	file.UpdatedAt = time.Now()
+
+	key := makePathKey(file.Path)
+	key = fmt.Sprintf("index_%s", key)
 
 	jsonData, err := json.Marshal(file)
 	if err != nil {
 		return err
+	}
+	if deBug {
+		err = writeJsonData(key, jsonData)
+		if err != nil {
+			log.Println("写入测试Json数据失败: ", err.Error())
+			return err
+		}
 	}
 
 	return DataBase.Client.Put([]byte(key), jsonData, wo)
 }
 
 func GetListIndexData(path string) (file File, err error) {
+
 	ro := &opt.ReadOptions{DontFillCache: false}
-	key := strings.Replace(path, "/", "_", -1)
-	key = "index_" + key
+
+	key := makePathKey(path)
+	key = fmt.Sprintf("index_%s", key)
 
 	jsonData, err := DataBase.Client.Get([]byte(key), ro)
 	if err == nil {
@@ -85,28 +160,10 @@ func GetListIndexData(path string) (file File, err error) {
 	return file, err
 }
 
-func GetFile(path string) (file File, err error) {
-	ro := &opt.ReadOptions{DontFillCache: false}
-	key := strings.Replace(path, "/", "_", -1)
-	dataByte, err := DataBase.Client.Get([]byte(key), ro)
-	if err == nil {
-		err = json.Unmarshal(dataByte, &file)
-		if err == nil {
-			authToken, err := GetDefaultAccessToken()
-			if err == nil {
-				option := aliyundrive_open.NewFileOption(authToken.DriveID, authToken.AccessToken)
-				file.FileInfo, err = authToken.File(option)
-			}
-		}
-	}
-
-	return file, err
-}
-
 func GetFiles(path string) (list []File, err error) {
 	ro := &opt.ReadOptions{DontFillCache: false}
 
-	key := strings.Replace(path, "/", "_", -1)
+	key := makePathKey(path)
 
 	dataByte, err := DataBase.Client.Get([]byte(key), ro)
 	if err == nil {
@@ -118,7 +175,9 @@ func GetFiles(path string) (list []File, err error) {
 
 func UpdateFile(path string, file File) error {
 	wo := &opt.WriteOptions{Sync: false}
-	key := strings.Replace(path, "/", "_", -1)
+
+	key := makePathKey(path)
+
 	jsonData, err := json.Marshal(file)
 	if err != nil {
 		return err
@@ -129,7 +188,7 @@ func UpdateFile(path string, file File) error {
 
 func RemoveFile(path string) error {
 	wo := &opt.WriteOptions{Sync: false}
-	key := strings.Replace(path, "/", "_", -1)
+	key := makePathKey(path)
 
 	return DataBase.Client.Delete([]byte(key), wo)
 }
@@ -137,10 +196,12 @@ func RemoveFile(path string) error {
 func GetPlayInfo(path string) (file File, err error) {
 
 	ro := &opt.ReadOptions{DontFillCache: false}
-	key := strings.Replace(path, "/", "_", -1)
+
+	key := makePathKey(path)
 
 	dataByte, err := DataBase.Client.Get([]byte(key), ro)
 	if err != nil {
+		RemoveFile(path)
 		return file, err
 	}
 
@@ -193,4 +254,37 @@ func URLBase64ToString(downloadUrl string) string {
 		return string(u)
 	}
 	return ""
+}
+
+func makePathKey(path string) string {
+	path = strings.Replace(path, "/", "_", -1)
+	driverID, err := GetDefaultDriveId()
+	if err == nil {
+		path = fmt.Sprintf("%s%s_%s", PrefixAli, driverID, path)
+	}
+	return path
+}
+
+func writeJsonData(name string, data []byte) error {
+	path := "jsonData"
+	_, err := os.Stat(path)
+	if err != nil {
+		err = os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+
+	file, err := os.Create("jsonData/" + name + ".json")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

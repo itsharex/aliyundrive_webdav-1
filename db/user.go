@@ -9,33 +9,29 @@ import (
 )
 
 const (
-	PrefixAliToken     = "ali_"
+	PrefixAli          = "ali_"
 	DefaultOpenDriveId = "defaultOpenDriveID"
 )
 
-func SaveDefaultOpenDriveId(driveId string) error {
+func SaveDefaultDriveId(driveId string) error {
 	return DataBase.SetString(DefaultOpenDriveId, driveId, true)
 }
 
-func GetDefaultOpenDriveId() (driveId string, err error) {
+func GetDefaultDriveId() (driveId string, err error) {
 	return DataBase.GetString(DefaultOpenDriveId, true)
 }
 
 func SaveAccessToken(token aliyundrive_open.Authorize) error {
-
 	if token.AccessToken == "" {
 		return errors.New("access_token is empty")
 	}
 
-	driveID, err := GetDefaultOpenDriveId()
-	if err != nil || driveID == "" {
-		err = SaveDefaultOpenDriveId(token.DriveID)
-		if err != nil {
-			return err
-		}
+	err := SaveDefaultDriveId(token.DriveID)
+	if err != nil {
+		return err
 	}
 
-	key := fmt.Sprintf("%s%s", PrefixAliToken, token.DriveID)
+	key := fmt.Sprintf("%s%s", PrefixAli, token.DriveID)
 
 	wo := &opt.WriteOptions{
 		Sync: false,
@@ -48,22 +44,8 @@ func SaveAccessToken(token aliyundrive_open.Authorize) error {
 	return DataBase.Client.Put([]byte(key), data, wo)
 }
 
-func RemoveDefaultAccessToken() error {
-	driveID, err := GetDefaultOpenDriveId()
-	if err != nil {
-		return err
-	}
-	key := fmt.Sprintf("%s%s", PrefixAliToken, driveID)
-	return DataBase.DelData(key, true)
-}
-
-func RemoveAccessToken(driveId string) error {
-	key := fmt.Sprintf("%s%s", PrefixAliToken, driveId)
-	return DataBase.DelData(key, true)
-}
-
 func GetDefaultAccessToken() (accessToken aliyundrive_open.Authorize, err error) {
-	driverID, err := GetDefaultOpenDriveId()
+	driverID, err := GetDefaultDriveId()
 	if err != nil {
 		return
 	}
@@ -73,7 +55,7 @@ func GetDefaultAccessToken() (accessToken aliyundrive_open.Authorize, err error)
 
 func GetAccessToken(driveId string) (accessToken aliyundrive_open.Authorize, err error) {
 
-	key := fmt.Sprintf("%s%s", PrefixAliToken, driveId)
+	key := fmt.Sprintf("%s%s", PrefixAli, driveId)
 
 	ro := &opt.ReadOptions{
 		DontFillCache: false,
@@ -90,12 +72,4 @@ func GetAccessToken(driveId string) (accessToken aliyundrive_open.Authorize, err
 	}
 
 	return accessToken, err
-}
-
-func SaveWabDavUser(username, password string) error {
-	return DataBase.SetString(username, password, false)
-}
-
-func GetWabDavUser(username string) (password string, err error) {
-	return DataBase.GetString(username, true)
 }

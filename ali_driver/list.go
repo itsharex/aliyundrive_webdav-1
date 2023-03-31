@@ -7,6 +7,16 @@ import (
 	"strings"
 )
 
+var PrintLog = false
+
+func ListAllFile() error {
+	err := GetFileList(db.File{}, "")
+	if err == nil {
+		return db.SaveFile()
+	}
+	return err
+}
+
 func GetFileList(file db.File, nextMarker string) error {
 	authToken, err := db.GetDefaultAccessToken()
 	if err != nil {
@@ -62,10 +72,14 @@ func GetFileList(file db.File, nextMarker string) error {
 			key := strings.Replace(nItem.ParentPath, "/", "_", -1)
 			db.FilesMapData[key] = append(db.FilesMapData[key], nItem)
 			if item.IsDir() {
-				color.Cyan("扫描目录(%s)内文件", item.Name)
+				if PrintLog {
+					color.Cyan("扫描目录(%s)内文件", item.Name)
+				}
 				GetFileList(nItem, "")
 			} else {
-				color.Green("保存文件(%s)成功", item.Name)
+				if PrintLog {
+					color.Green("保存文件(%s)成功", item.Name)
+				}
 			}
 		}
 

@@ -3,6 +3,7 @@ package main
 import (
 	"aliyundrive_webdav/ali_driver"
 	"aliyundrive_webdav/db"
+	"aliyundrive_webdav/tasks"
 	"aliyundrive_webdav/webdav"
 	"context"
 	"fmt"
@@ -21,23 +22,38 @@ import (
 	"time"
 )
 
+var DefaultPort = 6969
+
 var WorkPath = getCurrentAbPath()
 
 func init() {
 	db.InitDB(WorkPath)
+	tasks.InitTasks(WorkPath)
 }
 
 func main() {
 	args := os.Args
-	if len(args) > 1 {
+	if n := len(args); n > 1 {
 		switch strings.ToLower(args[1]) {
 		case "start":
-			_, err := db.GetDefaultAccessToken()
-			if err != nil {
-				fmt.Println("未登录阿里云盘, 请执行 login 登录")
+			pid, status := GetRunStatus()
+			if status {
+				color.Green("服务正在运行, PID: %d", pid)
 				return
 			} else {
-				StartServer()
+				authToken, err := db.GetDefaultAccessToken()
+				if err != nil {
+					fmt.Println("未登录阿里云盘, 请执行 login 登录")
+					return
+				} else {
+					authToken, err = ali_driver.RefreshToken(authToken.RefreshToken)
+					if err != nil {
+						fmt.Println("未登录或授权已失效, 请执行 login 登录")
+						return
+					}
+					go ali_driver.ListAllFile()
+					StartServer()
+				}
 			}
 		case "stop":
 			StopServer()
@@ -51,18 +67,14 @@ func main() {
 		case "login":
 			authToken, err := ali_driver.LoginQRCode()
 			if err == nil {
-				db.SaveAccessToken(authToken.Data)
-				info, err := authToken.Data.DriveInfo()
+				space, err := authToken.DriveSpace()
 				if err == nil {
-					space, err := authToken.Data.DriveSpace()
-					if err == nil {
-						fmt.Printf("云盘ID: %s\n总容量: %d GB\n已用: %d GB\n可用: %d GB\n",
-							info.DefaultDriveId,
-							space.PersonalSpaceInfo.TotalSize/1024/1024/1024, space.PersonalSpaceInfo.UsedSize/1024/1024/1024,
-							(space.PersonalSpaceInfo.TotalSize-space.PersonalSpaceInfo.UsedSize)/1024/1024/1024)
-						color.Red("%s\n", "登录成功, 可以执行 \"get\" 参数获取文件列表啦 ")
-						return
-					}
+					fmt.Printf("云盘ID: %s\n总容量: %d GB\n已用: %d GB\n可用: %d GB\n",
+						authToken.DriveID,
+						space.PersonalSpaceInfo.TotalSize/1024/1024/1024, space.PersonalSpaceInfo.UsedSize/1024/1024/1024,
+						(space.PersonalSpaceInfo.TotalSize-space.PersonalSpaceInfo.UsedSize)/1024/1024/1024)
+					color.Green("%s\n", "登录成功, 可以执行 \"get\" 参数获取文件列表啦 ")
+					return
 				}
 			}
 			color.Red("登录失败, 请重试!")
@@ -70,26 +82,25 @@ func main() {
 			_, ok := GetRunStatus()
 			if ok {
 				StopServer()
+				db.InitDB(WorkPath)
 				color.Red("Webdav 已停止, 请采集完成后再手动启动服务")
 			}
+
 			authToken, err := db.GetDefaultAccessToken()
 			if err == nil {
-				if authToken.ExpiresTime.After(time.Now()) {
-					authTokenR, err := ali_driver.RefreshToken(authToken.RefreshToken)
+				authToken, err = ali_driver.RefreshToken(authToken.RefreshToken)
+				if err == nil {
+					ali_driver.PrintLog = true
+					err := ali_driver.ListAllFile()
 					if err == nil {
-						db.SaveAccessToken(authTokenR.Data)
-						err = ali_driver.GetFileList(db.File{}, "")
-						if err == nil {
-							err = db.SaveFile()
-							if err == nil {
-								color.Red("%s\n", "获取云盘目录成功, 可以执行 \"start\" 参数启动 Webdav 服务啦")
-								return
-							}
-						}
+						color.Cyan("%s\n", "获取云盘目录成功, 可以执行 \"start\" 参数启动 Webdav 服务啦")
+						return
 					}
 				}
 			}
+
 			color.Red("%s\r", "获取云盘目录失败, 可能是未登录或授权已失效, 请重新登录")
+
 		default:
 			PrintHelp()
 		}
@@ -113,13 +124,14 @@ Get	获取云盘目录`)
 }
 
 func StopServer() {
-	fmt.Println("正在停止服务...")
+	color.Red("正在停止服务...")
 	pid, status := GetRunStatus()
 	if status {
 		ps, err := os.FindProcess(pid)
 		if err == nil {
 			err = ps.Kill()
 			if err == nil {
+				color.Green("服务已停止")
 				return
 			}
 		}
@@ -134,19 +146,20 @@ func StopServer() {
 			fmt.Println("删除pid文件失败: ", err)
 		}
 	}
+
 }
 
 func StartServer() {
 	pid, status := GetRunStatus()
 	if status {
-		color.Green("程序已经在运行中, PID: ", pid)
+		color.Green("服务正在运行, PID: %d", pid)
 		return
 	}
 
 	var e *echo.Echo
 	e = echo.New()
 	e.Any("/*", webdav.ServeHTTP)
-	err := GracefulHttp(e, strings.Join([]string{"0.0.0.0", fmt.Sprint(6969)}, ":"))
+	err := GracefulHttp(e)
 	if err != nil {
 		fmt.Println("服务启动失败: ", err)
 	}
@@ -172,7 +185,7 @@ func GetRunStatus() (pid int, status bool) {
 	return pid, status
 }
 
-func GracefulHttp(e *echo.Echo, address string) error {
+func GracefulHttp(e *echo.Echo) error {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGKILL)
 
@@ -196,10 +209,10 @@ func GracefulHttp(e *echo.Echo, address string) error {
 
 	err := os.WriteFile(path.Join(WorkPath, "pid"), []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	if err != nil {
-		log.Errorf("写入pid文件失败: %s", err)
+		log.Errorf("保存启动信息失败: %s", err)
 		return err
 	}
-	return e.Start(address)
+	return e.Start("0.0.0.0:6969")
 }
 
 func getCurrentAbPath() string {
