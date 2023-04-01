@@ -41,7 +41,7 @@ func main() {
 				color.Green("服务正在运行, PID: %d", pid)
 				return
 			} else {
-				authToken, err := db.GetDefaultAccessToken()
+				authToken, err := ali_driver.GetDefaultAccessToken()
 				if err != nil {
 					fmt.Println("未登录阿里云盘, 请执行 login 登录")
 					return
@@ -86,7 +86,7 @@ func main() {
 				color.Red("Webdav 已停止, 请采集完成后再手动启动服务")
 			}
 
-			authToken, err := db.GetDefaultAccessToken()
+			authToken, err := ali_driver.GetDefaultAccessToken()
 			if err == nil {
 				authToken, err = ali_driver.RefreshToken(authToken.RefreshToken)
 				if err == nil {
@@ -124,9 +124,9 @@ Get	获取云盘目录`)
 }
 
 func StopServer() {
-	color.Red("正在停止服务...")
 	pid, status := GetRunStatus()
 	if status {
+		color.Red("正在停止服务...")
 		ps, err := os.FindProcess(pid)
 		if err == nil {
 			err = ps.Kill()

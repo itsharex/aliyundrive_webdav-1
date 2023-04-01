@@ -5,7 +5,7 @@
 package webdav
 
 import (
-	"aliyundrive_webdav/db"
+	"aliyundrive_webdav/ali_driver"
 	"bytes"
 	"context"
 	"encoding/xml"
@@ -102,7 +102,7 @@ type DeadPropsHolder interface {
 var liveProps = map[xml.Name]struct {
 	// findFn implements the propfind function of this property. If nil,
 	// it indicates a hidden property.
-	findFn func(db.File) (string, error)
+	findFn func(ali_driver.File) (string, error)
 	// dir is true if the property applies to directories.
 	dir bool
 }{
@@ -157,7 +157,7 @@ var liveProps = map[xml.Name]struct {
 //
 // Each Propstat has a unique status and each property name will only be part
 // of one Propstat element.
-func props(fi db.File, pnames []xml.Name) ([]Propstat, error) {
+func props(fi ali_driver.File, pnames []xml.Name) ([]Propstat, error) {
 	isDir := fi.IsDir()
 	var deadProps map[xml.Name]Property
 
@@ -189,7 +189,7 @@ func props(fi db.File, pnames []xml.Name) ([]Propstat, error) {
 }
 
 // Propnames returns the property names defined for resource name.
-func propnames(fi db.File) ([]xml.Name, error) {
+func propnames(fi ali_driver.File) ([]xml.Name, error) {
 
 	isDir := fi.IsDir()
 
@@ -215,7 +215,7 @@ func propnames(fi db.File) ([]xml.Name, error) {
 // returned if they are named in 'include'.
 //
 // See http://www.webdav.org/specs/rfc4918.html#METHOD_PROPFIND
-func allprop(fi db.File, include []xml.Name) ([]Propstat, error) {
+func allprop(fi ali_driver.File, include []xml.Name) ([]Propstat, error) {
 	pnames, err := propnames(fi)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func escapeXML(s string) string {
 	return s
 }
 
-func findResourceType(fi db.File) (string, error) {
+func findResourceType(fi ali_driver.File) (string, error) {
 	if fi.IsDir() {
 		return `<D:collection xmlns:D="DAV:"/>`, nil
 	}
@@ -267,7 +267,7 @@ func slashClean(name string) string {
 	return path.Clean(name)
 }
 
-func findDisplayName(fi db.File) (string, error) {
+func findDisplayName(fi ali_driver.File) (string, error) {
 	if slashClean(fi.Name) == "/" {
 		// Hide the real name of a possibly prefixed root directory.
 		return "", nil
@@ -275,11 +275,11 @@ func findDisplayName(fi db.File) (string, error) {
 	return escapeXML(fi.Name), nil
 }
 
-func findContentLength(fi db.File) (string, error) {
+func findContentLength(fi ali_driver.File) (string, error) {
 	return strconv.FormatInt(fi.Size, 10), nil
 }
 
-func findLastModified(fi db.File) (string, error) {
+func findLastModified(fi ali_driver.File) (string, error) {
 	return fi.UpdatedAt.UTC().Format(http.TimeFormat), nil
 }
 
@@ -304,7 +304,7 @@ type ContentTyper interface {
 	ContentType(ctx context.Context) (string, error)
 }
 
-func findContentType(fi db.File) (string, error) {
+func findContentType(fi ali_driver.File) (string, error) {
 	return mime.TypeByExtension(fi.ContentType), nil
 }
 
@@ -326,7 +326,7 @@ type ETager interface {
 	ETag(ctx context.Context) (string, error)
 }
 
-func findETag(fi db.File) (string, error) {
+func findETag(fi ali_driver.File) (string, error) {
 	// The Apache http 2.4 web server by default concatenates the
 	// modification time and size of a file. We replicate the heuristic
 	// with nanosecond granularity.

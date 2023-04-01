@@ -1,11 +1,13 @@
-package db
+package ali_driver
 
 import (
+	"aliyundrive_webdav/db"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/yanjunhui/aliyundrive_open"
+	"time"
 )
 
 const (
@@ -14,11 +16,11 @@ const (
 )
 
 func SaveDefaultDriveId(driveId string) error {
-	return DataBase.SetString(DefaultOpenDriveId, driveId, true)
+	return db.DataBase.SetString(DefaultOpenDriveId, driveId, true)
 }
 
 func GetDefaultDriveId() (driveId string, err error) {
-	return DataBase.GetString(DefaultOpenDriveId, true)
+	return db.DataBase.GetString(DefaultOpenDriveId, true)
 }
 
 func SaveAccessToken(token aliyundrive_open.Authorize) error {
@@ -41,7 +43,7 @@ func SaveAccessToken(token aliyundrive_open.Authorize) error {
 	if err != nil {
 		return err
 	}
-	return DataBase.Client.Put([]byte(key), data, wo)
+	return db.DataBase.Client.Put([]byte(key), data, wo)
 }
 
 func GetDefaultAccessToken() (accessToken aliyundrive_open.Authorize, err error) {
@@ -52,7 +54,6 @@ func GetDefaultAccessToken() (accessToken aliyundrive_open.Authorize, err error)
 
 	return GetAccessToken(driverID)
 }
-
 func GetAccessToken(driveId string) (accessToken aliyundrive_open.Authorize, err error) {
 
 	key := fmt.Sprintf("%s%s", PrefixAli, driveId)
@@ -61,7 +62,7 @@ func GetAccessToken(driveId string) (accessToken aliyundrive_open.Authorize, err
 		DontFillCache: false,
 	}
 
-	dataByte, err := DataBase.Client.Get([]byte(key), ro)
+	dataByte, err := db.DataBase.Client.Get([]byte(key), ro)
 	if err != nil {
 		return accessToken, err
 	}
@@ -71,5 +72,12 @@ func GetAccessToken(driveId string) (accessToken aliyundrive_open.Authorize, err
 		return accessToken, err
 	}
 
-	return accessToken, err
+	if accessToken.ExpiresTime.Before(time.Now()) {
+		accessToken, err = RefreshToken(accessToken.RefreshToken)
+		if err != nil {
+			return accessToken, err
+		}
+	}
+
+	return accessToken, SaveAccessToken(accessToken)
 }

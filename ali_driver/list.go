@@ -1,7 +1,6 @@
 package ali_driver
 
 import (
-	"aliyundrive_webdav/db"
 	"github.com/fatih/color"
 	"github.com/yanjunhui/aliyundrive_open"
 	"strings"
@@ -10,15 +9,16 @@ import (
 var PrintLog = false
 
 func ListAllFile() error {
-	err := GetFileList(db.File{}, "")
+	FilesMapData = make(map[string][]File)
+	err := GetFileList(File{}, "")
 	if err == nil {
-		return db.SaveFile()
+		return SaveFile()
 	}
 	return err
 }
 
-func GetFileList(file db.File, nextMarker string) error {
-	authToken, err := db.GetDefaultAccessToken()
+func GetFileList(file File, nextMarker string) error {
+	authToken, err := GetDefaultAccessToken()
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func GetFileList(file db.File, nextMarker string) error {
 	}
 
 	//存储目录信息
-	err = db.SaveListIndexData(file)
+	err = SaveListIndexData(file)
 	if err != nil {
 		return err
 	}
@@ -65,12 +65,12 @@ func GetFileList(file db.File, nextMarker string) error {
 		}
 
 		for _, item := range list.Items {
-			nItem := db.File{}
+			nItem := File{}
 			nItem.FileInfo = item
 			nItem.ParentPath = file.Path
 			nItem.Path = file.Path + "/" + item.Name
 			key := strings.Replace(nItem.ParentPath, "/", "_", -1)
-			db.FilesMapData[key] = append(db.FilesMapData[key], nItem)
+			FilesMapData[key] = append(FilesMapData[key], nItem)
 			if item.IsDir() {
 				if PrintLog {
 					color.Cyan("扫描目录(%s)内文件", item.Name)

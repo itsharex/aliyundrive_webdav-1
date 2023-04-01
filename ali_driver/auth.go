@@ -1,7 +1,6 @@
 package ali_driver
 
 import (
-	"aliyundrive_webdav/db"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/skip2/go-qrcode"
@@ -88,7 +87,7 @@ func RefreshToken(refreshToken string) (authToken aliyundrive_open.Authorize, er
 
 	authToken = result.Data
 
-	return authToken, db.SaveAccessToken(result.Data)
+	return authToken, SaveAccessToken(result.Data)
 }
 
 // 完整的登录授权流程
@@ -140,5 +139,5 @@ func LoginQRCode() (authToken aliyundrive_open.Authorize, err error) {
 		return authToken, err
 	}
 
-	return authorize, db.SaveAccessToken(authorize)
+	return authorize, SaveAccessToken(authorize)
 }

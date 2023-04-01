@@ -1,6 +1,7 @@
-package db
+package ali_driver
 
 import (
+	"aliyundrive_webdav/db"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -23,8 +24,9 @@ var deBug = false
 var FilesMapData = map[string][]File{}
 
 func SaveFile() error {
+
 	wo := &opt.WriteOptions{
-		Sync: false,
+		Sync: true,
 	}
 
 	save := func(file File) {
@@ -39,25 +41,7 @@ func SaveFile() error {
 				}
 			}
 
-			//删除重命名的文件
-			cacheFilePath, err := DataBase.GetString(file.FileId, false)
-			if err == nil {
-				if cacheFilePath != file.Path {
-					err = os.Remove(makePathKey(cacheFilePath))
-					if err != nil {
-						log.Println("删除缓存文件失败: ", err.Error())
-					}
-				}
-			}
-
-			//保存FileID和Path对应关系
-			err = DataBase.SetString(file.FileId, file.Path, true)
-			if err != nil {
-				log.Println("保存FileID和Path对应关系失败: ", err.Error())
-				return
-			}
-
-			err = DataBase.Client.Put([]byte(key), jsonData, wo)
+			err = db.DataBase.Client.Put([]byte(key), jsonData, wo)
 			if err != nil {
 				log.Printf("保存文件(%s)失败: %s", key, err.Error())
 			}
@@ -76,24 +60,6 @@ func SaveFile() error {
 		key = makePathKey(key)
 		dirFile, err := GetListIndexData(key)
 		if err == nil {
-			//删除重命名的文件
-			cacheFilePath, err := DataBase.GetString(dirFile.FileId, false)
-			if err == nil {
-				if cacheFilePath != dirFile.Path {
-					err = os.Remove(makePathKey(cacheFilePath))
-					if err != nil {
-						log.Println("删除缓存文件失败: ", err.Error())
-					}
-				}
-			}
-
-			//保存FileID和Path对应关系
-			err = DataBase.SetString(dirFile.FileId, dirFile.Path, true)
-			if err != nil {
-				log.Println("保存FileID和Path对应关系失败: ", err.Error())
-				return err
-			}
-
 			err = SaveListIndexData(dirFile)
 			if err != nil {
 				log.Printf("保存文件(%s)列表索引信息失败: %s", key, err.Error())
@@ -110,7 +76,7 @@ func SaveFile() error {
 				}
 			}
 
-			err = DataBase.Client.Put([]byte(key), jsonData, wo)
+			err = db.DataBase.Client.Put([]byte(key), jsonData, wo)
 			if err != nil {
 				log.Printf("保存文件(%s)列表失败: %s", key, err.Error())
 			}
@@ -122,7 +88,7 @@ func SaveFile() error {
 
 func SaveListIndexData(file File) error {
 	wo := &opt.WriteOptions{
-		Sync: false,
+		Sync: true,
 	}
 
 	file.UpdatedAt = time.Now()
@@ -142,7 +108,7 @@ func SaveListIndexData(file File) error {
 		}
 	}
 
-	return DataBase.Client.Put([]byte(key), jsonData, wo)
+	return db.DataBase.Client.Put([]byte(key), jsonData, wo)
 }
 
 func GetListIndexData(path string) (file File, err error) {
@@ -152,7 +118,7 @@ func GetListIndexData(path string) (file File, err error) {
 	key := makePathKey(path)
 	key = fmt.Sprintf("index_%s", key)
 
-	jsonData, err := DataBase.Client.Get([]byte(key), ro)
+	jsonData, err := db.DataBase.Client.Get([]byte(key), ro)
 	if err == nil {
 		err = json.Unmarshal(jsonData, &file)
 	}
@@ -160,12 +126,20 @@ func GetListIndexData(path string) (file File, err error) {
 	return file, err
 }
 
+func RemoveListIndexData(path string) error {
+
+	key := makePathKey(path)
+	key = fmt.Sprintf("index_%s", key)
+
+	return db.DataBase.DelData(key, true)
+}
+
 func GetFiles(path string) (list []File, err error) {
 	ro := &opt.ReadOptions{DontFillCache: false}
 
 	key := makePathKey(path)
 
-	dataByte, err := DataBase.Client.Get([]byte(key), ro)
+	dataByte, err := db.DataBase.Client.Get([]byte(key), ro)
 	if err == nil {
 		err = json.Unmarshal(dataByte, &list)
 	}
@@ -174,7 +148,7 @@ func GetFiles(path string) (list []File, err error) {
 }
 
 func UpdateFile(path string, file File) error {
-	wo := &opt.WriteOptions{Sync: false}
+	wo := &opt.WriteOptions{Sync: true}
 
 	key := makePathKey(path)
 
@@ -183,14 +157,14 @@ func UpdateFile(path string, file File) error {
 		return err
 	}
 
-	return DataBase.Client.Put([]byte(key), jsonData, wo)
+	return db.DataBase.Client.Put([]byte(key), jsonData, wo)
 }
 
 func RemoveFile(path string) error {
 	wo := &opt.WriteOptions{Sync: false}
 	key := makePathKey(path)
 
-	return DataBase.Client.Delete([]byte(key), wo)
+	return db.DataBase.Client.Delete([]byte(key), wo)
 }
 
 func GetPlayInfo(path string) (file File, err error) {
@@ -199,9 +173,10 @@ func GetPlayInfo(path string) (file File, err error) {
 
 	key := makePathKey(path)
 
-	dataByte, err := DataBase.Client.Get([]byte(key), ro)
+	dataByte, err := db.DataBase.Client.Get([]byte(key), ro)
 	if err != nil {
 		RemoveFile(path)
+		RemoveListIndexData(path)
 		return file, err
 	}
 
@@ -209,6 +184,7 @@ func GetPlayInfo(path string) (file File, err error) {
 	if err != nil {
 		log.Printf("解析文件(%s)数据失败: %s", path, err.Error())
 		RemoveFile(path)
+		RemoveListIndexData(path)
 		return file, err
 	}
 

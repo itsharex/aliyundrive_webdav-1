@@ -1,7 +1,7 @@
 package webdav
 
 import (
-	"aliyundrive_webdav/db"
+	"aliyundrive_webdav/ali_driver"
 	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4"
@@ -59,7 +59,7 @@ func handleGetHeadPost(ctx echo.Context) error {
 
 	reqPath = strings.TrimLeft(reqPath, "/")
 
-	file, err := db.GetPlayInfo(reqPath)
+	file, err := ali_driver.GetPlayInfo(reqPath)
 	if err != nil {
 		log.Printf("查询路径(%s) 失败: %s", reqPath, err.Error())
 		return ctx.NoContent(http.StatusNotFound)
@@ -100,7 +100,7 @@ func handlePropfind(ctx echo.Context) error {
 		}
 	}
 
-	file, err := db.GetListIndexData(reqPath)
+	file, err := ali_driver.GetListIndexData(reqPath)
 	if err != nil {
 		log.Printf("查询路径(%s) 失败: %s", reqPath, err.Error())
 		return ctx.NoContent(http.StatusNotFound)
@@ -112,7 +112,7 @@ func handlePropfind(ctx echo.Context) error {
 	}
 
 	mw := multistatusWriter{w: ctx.Response()}
-	walkFn := func(reqPath string, info db.File, err error) error {
+	walkFn := func(reqPath string, info ali_driver.File, err error) error {
 		if err != nil {
 			return err
 		}
@@ -161,7 +161,7 @@ func handlePropfind(ctx echo.Context) error {
 // Allowed values for depth are 0, 1 or infiniteDepth. For each visited node,
 // walkFS calls walkFn. If a visited file system node is a directory and
 // walkFn returns filepath.SkipDir, walkFS will skip traversal of this node.
-func walkFS(path string, fi db.File, depth int, walkFn func(reqPath string, info db.File, err error) error) error {
+func walkFS(path string, fi ali_driver.File, depth int, walkFn func(reqPath string, info ali_driver.File, err error) error) error {
 	// This implementation is based on Walk's code in the standard path/filepath package.
 	err := walkFn(path, fi, nil)
 	if err != nil {
@@ -179,7 +179,7 @@ func walkFS(path string, fi db.File, depth int, walkFn func(reqPath string, info
 		depth = 0
 	}
 
-	list, err := db.GetFiles(path)
+	list, err := ali_driver.GetFiles(path)
 	if err != nil {
 		return err
 	}
