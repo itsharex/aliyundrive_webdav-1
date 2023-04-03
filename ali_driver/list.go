@@ -30,7 +30,7 @@ func GetFileList(file File, nextMarker string) error {
 		file.Type = "folder"
 	} else {
 		path := file.Path
-		option := aliyundrive_open.NewFileOption(authToken.DriveID, file.FileId)
+		option := aliyundrive_open.NewFileOption(file.FileId)
 		nFile, err := authToken.File(option)
 		if err != nil {
 			return err
@@ -58,7 +58,7 @@ func GetFileList(file File, nextMarker string) error {
 			file.FileId = "root"
 		}
 
-		option := aliyundrive_open.NewFileListOption(authToken.DriveID, file.FileId, nextMarker)
+		option := aliyundrive_open.NewFileListOption(file.FileId, nextMarker)
 		list, err := authToken.FileList(option)
 		if err != nil {
 			return err

@@ -2,6 +2,7 @@ package aliyundrive_open
 
 import (
 	"os"
+	"strings"
 )
 
 // OrderSortedField 排序字段
@@ -75,6 +76,7 @@ type FileOption struct {
 	ParentFileID        string               `json:"parent_file_id"`        // 目录ID(目录/必填)
 	FileID              string               `json:"file_id,omitempty"`     // 文件ID(文件必填)
 	Name                string               `json:"name"`                  // 文件名(重命名必填)
+	Path                string               `json:"path"`                  // 文件完整路径(不包括 /root)
 	ExpireSec           int64                `json:"expire_sec"`            // 下载链接有效期(链接必填)
 	URLExpireSec        int64                `json:"url_expire_sec"`        // 视频播放地址有效期(播放必填)
 	ToParentFileID      string               `json:"to_parent_file_id"`     // 移动到的目录ID(移动必填)
@@ -110,13 +112,12 @@ type ParallelSha1Ctx struct {
 }
 
 // NewFileCreateOption 创建文件参数
-func NewFileCreateOption(driveID, parentFileID, name string) *FileOption {
+func NewFileCreateOption(parentFileID, name string) *FileOption {
 	if parentFileID == "" {
 		parentFileID = "root"
 	}
 
 	return &FileOption{
-		DriveID:       driveID,
 		ParentFileID:  parentFileID,
 		Name:          name,
 		CheckNameMode: "auto_rename",
@@ -124,17 +125,16 @@ func NewFileCreateOption(driveID, parentFileID, name string) *FileOption {
 }
 
 // NewFileUploadOption 创建文件上传参数
-func NewFileUploadOption(driveID, parentFileID, name string, of *os.File) *FileOption {
-	option := NewFileCreateOption(driveID, parentFileID, name)
+func NewFileUploadOption(parentFileID, name string, of *os.File) *FileOption {
+	option := NewFileCreateOption(parentFileID, name)
 	option.Type = FileTypeFile
 	option.OpenFile = of
 	return option
 }
 
 // NewFileVideoPlayInfoOption 创建获取视频播放信息参数
-func NewFileVideoPlayInfoOption(driveID, fileID string) *FileOption {
+func NewFileVideoPlayInfoOption(fileID string) *FileOption {
 	return &FileOption{
-		DriveID:      driveID,
 		FileID:       fileID,
 		Category:     "live_transcoding",
 		URLExpireSec: 14400,
@@ -142,17 +142,15 @@ func NewFileVideoPlayInfoOption(driveID, fileID string) *FileOption {
 }
 
 // NewFileTrashAndDeleteOption 创建文件删除参数
-func NewFileTrashAndDeleteOption(driveID, fileID string) *FileOption {
+func NewFileTrashAndDeleteOption(fileID string) *FileOption {
 	return &FileOption{
-		DriveID: driveID,
-		FileID:  fileID,
+		FileID: fileID,
 	}
 }
 
 // NewFileMoveAndCopyOption 创建文件复制/移动参数
-func NewFileMoveAndCopyOption(driveID, fileID, toParentFileID string) *FileOption {
+func NewFileMoveAndCopyOption(fileID, toParentFileID string) *FileOption {
 	return &FileOption{
-		DriveID:        driveID,
 		FileID:         fileID,
 		ToParentFileID: toParentFileID,
 		CheckNameMode:  "auto_rename",
@@ -160,50 +158,60 @@ func NewFileMoveAndCopyOption(driveID, fileID, toParentFileID string) *FileOptio
 }
 
 // NewFileDownloadURLOption 创建获取单个文件下载链接默认参数
-func NewFileDownloadURLOption(driveID, fileID string) *FileOption {
+func NewFileDownloadURLOption(fileID string) *FileOption {
 	return &FileOption{
-		DriveID:   driveID,
 		FileID:    fileID,
 		ExpireSec: 115200,
 	}
 }
 
 // NewFileRenameOption 创建重命名参数
-func NewFileRenameOption(driveID, fileID, newName string) *FileOption {
+func NewFileRenameOption(fileID, newName string) *FileOption {
 	return &FileOption{
-		DriveID: driveID,
-		FileID:  fileID,
-		Name:    newName,
+		FileID: fileID,
+		Name:   newName,
 	}
 }
 
 // NewFileOption 创建获取单个文件默认参数
-func NewFileOption(driveID, fileID string) *FileOption {
+func NewFileOption(fileID string) *FileOption {
 	return &FileOption{
-		DriveID: driveID,
-		FileID:  fileID,
+		FileID: fileID,
+	}
+}
+
+// NewFileOptionByPath 根据文件路径获取文件信息, 该接口暂为灰度测试接口
+func NewFileOptionByPath(path string) *FileOption {
+	return &FileOption{
+		Path: path,
 	}
 }
 
 // NewFilesOption 创建获取多个文件默认参数
-func NewFilesOption(driveID string, fileIDs []string) (options []*FileOption) {
+func NewFilesOption(fileIDs []string) (options []*FileOption) {
 	for _, id := range fileIDs {
-		options = append(options, NewFileOption(driveID, id))
+		options = append(options, NewFileOption(id))
 	}
 	return
 }
 
 // NewFileListOption 创建默认文件列表参数
-func NewFileListOption(driveID, parentFileID, marker string) *FileOption {
+func NewFileListOption(parentFileID, marker string) *FileOption {
 	return &FileOption{
-		DriveID:        driveID,
 		ParentFileID:   parentFileID,
 		Marker:         marker,
 		OrderBy:        OrderFieldName,
 		OrderDirection: OrderSortedDirectionAsc,
 		Limit:          100,
 		URLExpireSec:   86400,
+		Fields:         "*",
 	}
+}
+
+// SetDriveID 设置目录ID
+func (option *FileOption) SetDriveID(driveID string) *FileOption {
+	option.DriveID = driveID
+	return option
 }
 
 // SetParentFileID 设置目录ID
@@ -215,6 +223,12 @@ func (option *FileOption) SetParentFileID(parentFileID string) *FileOption {
 // SetFileID 设置文件ID
 func (option *FileOption) SetFileID(fileID string) *FileOption {
 	option.FileID = fileID
+	return option
+}
+
+// SetFilePath 设置文件ID
+func (option *FileOption) SetFilePath(path string) *FileOption {
+	option.Path = path
 	return option
 }
 
@@ -287,6 +301,12 @@ func (option *FileOption) SetType(fileType FileType) *FileOption {
 // SetVideoThumbnailTime 设置视频预览时间
 func (option *FileOption) SetVideoThumbnailTime(time int64) *FileOption {
 	option.VideoThumbnailTime = time
+	return option
+}
+
+// SetFields 设置返回字段
+func (option *FileOption) SetFields(fields []string) *FileOption {
+	option.Fields = strings.Join(fields, ",")
 	return option
 }
 

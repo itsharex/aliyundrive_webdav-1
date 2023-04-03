@@ -193,7 +193,7 @@ func GetPlayInfo(path string) (file File, err error) {
 		return file, err
 	}
 
-	option := aliyundrive_open.NewFileDownloadURLOption(authToken.DriveID, file.FileId)
+	option := aliyundrive_open.NewFileDownloadURLOption(file.FileId)
 	downInfo, err := authToken.FileDownloadURL(option)
 	if err != nil {
 		log.Printf("获取文件(%s)下载信息失败: %s", path, err.Error())

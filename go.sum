@@ -61,8 +61,8 @@ github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyC
 github.com/valyala/fasttemplate v1.2.1/go.mod h1:KHLXt3tVN2HBp8eijSv/kGJopbvo7S+qRAEEKiv+SiQ=
 github.com/valyala/fasttemplate v1.2.2 h1:lxLXG0uE3Qnshl9QyaK6XJxMXlQZELvChBOCmQD0Loo=
 github.com/valyala/fasttemplate v1.2.2/go.mod h1:KHLXt3tVN2HBp8eijSv/kGJopbvo7S+qRAEEKiv+SiQ=
-github.com/yanjunhui/aliyundrive_open v0.0.4 h1:qLS3dCaagSsxrlmzEWuo6s1izoaSIyCMK/s/dhSYApc=
-github.com/yanjunhui/aliyundrive_open v0.0.4/go.mod h1:FtqiRvtj3aG/QWxzL9+pP9m6i/VMrNCgdTgbyGbnvI0=
+github.com/yanjunhui/aliyundrive_open v0.0.6 h1:kJn/uAuvKwqceJ6P3mbjvaVPPrIh0MbBR4t0t0dhE0g=
+github.com/yanjunhui/aliyundrive_open v0.0.6/go.mod h1:FtqiRvtj3aG/QWxzL9+pP9m6i/VMrNCgdTgbyGbnvI0=
 github.com/yusufpapurcu/wmi v1.2.2 h1:KBNDSne4vP5mbSWnJbO+51IMOXJB67QiYCSBrubbPRg=
 github.com/yusufpapurcu/wmi v1.2.2/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 golang.org/x/crypto v0.6.0 h1:qfktjS5LUO+fFKeJXZ+ikTRijMmljikvG68fpMMruSc=

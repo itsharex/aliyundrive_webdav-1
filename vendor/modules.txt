@@ -68,7 +68,7 @@ github.com/valyala/bytebufferpool
 # github.com/valyala/fasttemplate v1.2.2
 ## explicit; go 1.12
 github.com/valyala/fasttemplate
-# github.com/yanjunhui/aliyundrive_open v0.0.4
+# github.com/yanjunhui/aliyundrive_open v0.0.6
 ## explicit; go 1.20
 github.com/yanjunhui/aliyundrive_open
 # github.com/yusufpapurcu/wmi v1.2.2
